@@ -6,47 +6,33 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from flwr_datasets import FederatedDataset
-from flwr_datasets.partitioner import IidPartitioner
+from flwr_datasets.partitioner import IidPartitioner, PathologicalPartitioner
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose, Normalize, ToTensor
 
 
-class Net(nn.Module):
-    """Model (simple CNN adapted from 'PyTorch: A 60 Minute Blitz')"""
 
-    def __init__(self):
-        super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(3, 6, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)
-
-    def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 16 * 5 * 5)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        return self.fc3(x)
-
-
-fds = None  # Cache FederatedDataset
-
-
-def load_data(partition_id: int, num_partitions: int):
+fds = None 
+def load_data(partition_id: int, num_partitions: int, mode_data='iid'):
     """Load partition CIFAR10 data."""
     # Only initialize `FederatedDataset` once
     global fds
     if fds is None:
-        partitioner = IidPartitioner(num_partitions=num_partitions)
+        if mode_data == "iid":
+            partitioner = IidPartitioner(num_partitions=num_partitions)
+        elif mode_data == "non-iid":
+            partitioner = PathologicalPartitioner(
+            num_partitions=10, 
+            partition_by="label",
+            num_classes_per_partition=2, 
+            class_assignment_mode="deterministic" 
+        )
         fds = FederatedDataset(
             dataset="uoft-cs/cifar10",
             partitioners={"train": partitioner},
         )
     partition = fds.load_partition(partition_id)
-    # Divide data on each node: 80% train, 20% test
+
     partition_train_test = partition.train_test_split(test_size=0.2, seed=42)
     pytorch_transforms = Compose(
         [ToTensor(), Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
@@ -62,12 +48,12 @@ def load_data(partition_id: int, num_partitions: int):
     testloader = DataLoader(partition_train_test["test"], batch_size=32)
     return trainloader, testloader
 
-
 def train(net, trainloader, epochs, device):
-    """Train the model on the training set."""
+    
     net.to(device)  # move model to GPU if available
     criterion = torch.nn.CrossEntropyLoss().to(device)
-    optimizer = torch.optim.Adam(net.parameters(), lr=0.01)
+    # optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
+    optimizer = torch.optim.AdamW(net.parameters(), lr=0.0005, weight_decay=1e-4)
     net.train()
     running_loss = 0.0
     for _ in range(epochs):
@@ -76,7 +62,7 @@ def train(net, trainloader, epochs, device):
             labels = batch["label"]
             optimizer.zero_grad()
             loss = criterion(net(images.to(device)), labels.to(device))
-            loss.backward()
+            loss.backward(retain_graph=True)
             optimizer.step()
             running_loss += loss.item()
 
