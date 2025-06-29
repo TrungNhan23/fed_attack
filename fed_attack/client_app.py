@@ -17,9 +17,12 @@ class FlowerClient(NumPyClient):
         self.local_epochs = local_epochs
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.net.to(self.device)
-
+        self.lr = 0.001
     def fit(self, parameters, config):
         set_weights(self.net, parameters)
+        round_num = config["current_round"]
+        lr = self.lr * (0.5 ** (round_num // 5)) 
+        print(f"Current learning rate: {lr}")
         train_loss = train(
             self.net,
             self.trainloader,

@@ -25,12 +25,14 @@ serverapp = "fed_attack.server_app:app"
 clientapp = "fed_attack.client_app:app"
 
 [tool.flwr.app.config]
-num-server-rounds = 10
-fraction-fit = 0.5
-local-epochs = 3
+num-server-rounds = 20
+fraction-fit = 0.8
+local-epochs = 5
 
 [tool.flwr.federations]
 default = "local-simulation"
 
 [tool.flwr.federations.local-simulation]
 options.num-supernodes = 10
+options.backend.client-resources.num-cpus = 1
+options.backend.client-resources.num-gpus = 0.25

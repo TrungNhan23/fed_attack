@@ -1,5 +1,11 @@
 """fed-attack: A Flower / PyTorch app."""
 import torch
+print("CUDA Available:", torch.cuda.is_available())  
+print("Number of GPUs:", torch.cuda.device_count())  
+print("GPU Name:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No GPU")  
+print("CUDA Version:", torch.version.cuda)  
+
+
 import torch.nn as nn
 from flwr.common import Context, ndarrays_to_parameters
 from flwr.server import ServerApp, ServerAppComponents, ServerConfig
@@ -20,7 +26,7 @@ history = {
 }
 
 
-def pretrain_on_server(model, device, num_samples=1000, lr=0.01, epochs=5):
+def pretrain_on_server(model, device, num_samples=1000, lr=0.01, epochs=10):
     full_train_loader, _ = load_data(0,1, 'iid')
     trainset = full_train_loader.dataset
     subset_dataset = Subset(trainset, list(range(num_samples)))
