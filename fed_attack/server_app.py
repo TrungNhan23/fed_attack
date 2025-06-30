@@ -30,7 +30,7 @@ def pretrain_on_server(model, device, num_samples=1000, lr=0.01, epochs=10):
     full_train_loader, _ = load_data(0,1, 'iid')
     trainset = full_train_loader.dataset
     subset_dataset = Subset(trainset, list(range(num_samples)))
-    subset_loader = DataLoader(subset_dataset, batch_size=32, shuffle=True)
+    subset_loader = DataLoader(subset_dataset, batch_size=64, shuffle=True)
     model.to(device)
     criterion = nn.CrossEntropyLoss() 
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
