@@ -1,6 +1,6 @@
 #!/bin/bash
 
-rm -rf ./output  ./images ./csv
+rm -rf ./output ./tmp ./images ./csv
  
 sleep 1s
 

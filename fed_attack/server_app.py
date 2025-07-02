@@ -17,6 +17,8 @@ from torchinfo import summary
 from typing import List, Dict, Tuple, Optional
 from torchvision import transforms, datasets
 import numpy as np 
+from fed_attack.attack import *
+import csv
 
 
 history = {
@@ -24,6 +26,38 @@ history = {
     "ASR": [],
     "CA": []
 }
+
+current_round = 0
+def predict_on_clean_testset(model, testloader, label=1, device="cuda:0"):
+
+    model.to(device)
+    model.eval()
+
+    correct_predictions = 0
+    total_predictions = 0
+
+    for batch in testloader:
+        images, labels = batch
+        images, labels = images.to(device), labels.to(device)
+
+
+        mask = (labels == label)
+        images = images[mask]
+        labels = labels[mask]
+
+        if len(images) == 0:
+            continue 
+
+    
+        outputs = model(images)
+        preds = outputs.argmax(dim=1)
+
+
+        correct_predictions += (preds == labels).sum().item()
+        total_predictions += len(labels)
+
+
+    return correct_predictions / total_predictions if total_predictions > 0 else 0
 
 
 def pretrain_on_server(model, device, num_samples=1000, lr=0.01, epochs=10):
@@ -76,6 +110,25 @@ def weighted_average(metrics):
     weighted_accuracy = sum(accuracies) / num_examples_total
     return {"accuracy": weighted_accuracy}
 
+def save_metrics_to_csv(history, filename, output_dirs="./output/csv"):
+    if not os.path.exists(output_dirs):
+        os.makedirs(output_dirs, exist_ok=True)
+        
+    if len(history["accuracy"]) == 0:
+        print("No accuracy data to save.")
+        return
+
+    rounds = [r for r, _ in history.get("ASR", [])]
+    asrs = [a for _, a in history.get("ASR", [])]
+    cas = [c for _, c in history.get("CA", [])]
+    output_path = os.path.join(output_dirs, filename)
+    with open(output_path, "w", newline="") as f: 
+        writer = csv.writer(f)
+        writer.writerow(["Rounds", "ASR", "CA"])
+        for r, asr, ca in zip(rounds, asrs, cas):
+            writer.writerow([r, asr, ca])
+    print(f"Metrics saved to {output_path}")
+
 def get_evaluate_fn(model):
     """Return an evaluation function for server-side evaluation using PyTorch and MNIST."""
 
@@ -86,7 +139,7 @@ def get_evaluate_fn(model):
     full_dataset = datasets.CIFAR10(root="../data", download=True, transform=transform, train=False)
     
     
-    eval_dataset = Subset(full_dataset, range(len(full_dataset) - 2000,
+    eval_dataset = Subset(full_dataset, range(len(full_dataset),
                                               len(full_dataset)))
     eval_loader = DataLoader(eval_dataset, batch_size=32, shuffle=True)
 
@@ -102,15 +155,15 @@ def get_evaluate_fn(model):
 
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         model.to(device)
-        # asr = predict_on_adversarial_testset(model, eval_loader, 
-        #                                      current_round, 
-        #                                      isClean = UNTARGETED, 
-        #                                      epsilon=EPSILON, 
-        #                                      mode=ATTACK_MODE,
-        #                                      device=device)
-        # ca = predict_on_clean_testset(model, eval_loader, device=device)
-        # history["ASR"].append((server_round, asr))
-        # history["CA"].append((server_round, ca))
+        asr = predict_on_adversarial_testset(model, eval_loader, 
+                                             current_round, 
+                                             isClean = UNTARGETED, 
+                                             epsilon=EPSILON, 
+                                             mode=ATTACK_MODE,
+                                             device=device)
+        ca = predict_on_clean_testset(model, eval_loader, device=device)
+        history["ASR"].append((server_round, asr))
+        history["CA"].append((server_round, ca))
         # Evaluate the model
         total_loss = 0.0
         correct = 0
@@ -138,7 +191,7 @@ def get_evaluate_fn(model):
         # Call plot_accuracy every 5 rounds
         # if server_round % 5 == 0:
         #     plot_accuracy(history)
-        #     save_metrics_to_csv(history, "metrics" + str(ATTACK_MODE) + str(EPSILON) + "Clean-label" if Clean else "Flipping-label" + ".csv")
+            save_metrics_to_csv(history, "metrics" + str(ATTACK_MODE) + str(EPSILON) + "Clean-label" if Clean else "Flipping-label" + ".csv")
             # plot_asr_and_ca(history) 
             # display_predictions(model, eval_loader, 1, device)
 

@@ -6,7 +6,7 @@ from flwr.client import ClientApp, NumPyClient
 from flwr.common import Context
 from fed_attack.task import *
 from fed_attack.model import *
-
+from fed_attack.attack import *
 g_losses = []
 d_losses = []
 
@@ -64,9 +64,10 @@ class AttackerClient(NumPyClient):
             print("Loaded GAN checkpoint.")
         else:
             os.makedirs("./tmp", exist_ok=True)
-            self.G.apply(weights_init_normal)
-            self.D.apply(weights_init_normal)
-            print("No GAN checkpoint found. Using initialized weights.")        
+            pretrain_checkpoint = torch.load("/root/fed_attack/fed_attack/model/pretrain_gan_checkpoint.pth", weights_only=True)
+            self.G.load_state_dict(pretrain_checkpoint["G_state_dict"])
+            self.D.load_state_dict(pretrain_checkpoint["D_state_dict"])
+            print("No GAN checkpoint found. Using pretrain weights.")        
         
     def save_checkpoint(self):
         checkpoint = {
@@ -89,19 +90,19 @@ class AttackerClient(NumPyClient):
             self.target_data, 
             self.device
         )
-        # if cur_round >= ROUND_TO_ATTACK:
-        #     print("Injecting adversarial samples into the training data.")
-        #     dataloader = create_attacker_data(self.net, 
-        #                                     self.G, 
-        #                                     self.trainloader, 
-        #                                     self.device,
-        #                                     untargeted=UNTARGETED, 
-        #                                     mode=ATTACK_MODE,
-        #                                     # mode='fgsm',
-        #                                     target_labels=TARGETED_LABEL)
-        # else:
-        #     print("No injection of adversarial samples.")
-        #     dataloader = self.trainloader   
+        if cur_round >= ROUND_TO_ATTACK:
+            print("Injecting adversarial samples into the training data.")
+            dataloader = create_attacker_data(self.net, 
+                                            self.G, 
+                                            self.trainloader, 
+                                            self.device,
+                                            untargeted=UNTARGETED, 
+                                            mode=ATTACK_MODE,
+                                            # mode='fgsm',
+                                            target_labels=TARGETED_LABEL)
+        else:
+            print("No injection of adversarial samples.")
+            dataloader = self.trainloader   
         train_loss = train(
             self.net,
             self.trainloader,

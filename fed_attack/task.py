@@ -145,7 +145,7 @@ def denorm(x, channels=None, w=None ,h=None, resize = False):
     return x
 
 def gan_train(G, D, target_data, device, learning_rate=0.001, 
-            beta1=0.5, epochs=15, latent_dim=128, batch_size=64): 
+            beta1=0.5, epochs=1, latent_dim=128, batch_size=64): 
     criterion = nn.BCELoss(reduction='mean')
     os.makedirs("./output", exist_ok=True)
     def loss_function(out, label):
@@ -153,7 +153,7 @@ def gan_train(G, D, target_data, device, learning_rate=0.001,
         return loss
     
     optimizerD = torch.optim.Adam(D.parameters(), lr=learning_rate, betas=(beta1, 0.999))
-    optimizerG = torch.optim.Adam(G.parameters(), lr=3*learning_rate, betas=(beta1, 0.999))
+    optimizerG = torch.optim.Adam(G.parameters(), lr=learning_rate, betas=(beta1, 0.999))
     
     fixed_noise = torch.randn(batch_size, latent_dim, 1, 1, device=device)
     real_label = 0.9
