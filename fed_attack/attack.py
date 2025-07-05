@@ -6,10 +6,10 @@ import os
 from torchvision import transforms
 
 
-ATTACK_MODE = 'nes-pgd-imp'
+ATTACK_MODE = 'pgd'
 EPSILON = 8/255
 NUM_STEPS = 50
-Clean = True
+Clean = False
 DATA_MODE = 'iid'
 #if test in clean label attack, set the untargeted to True
 if Clean:
@@ -17,7 +17,7 @@ if Clean:
     TARGETED_LABEL = 1
 else: 
     UNTARGETED = False
-    TARGETED_LABEL = 3
+    TARGETED_LABEL = 0
     
 EPSILON_STEP = EPSILON / NUM_STEPS
 NUM_SAMPLES = 100
@@ -42,94 +42,115 @@ class Attacker():
         self.model = model 
         self.device = device
         
-    
     def generate_PGD_adversarial_images(self, images, labels, untargeted):
         epsilon = self.epsilon
-        x = images.clone().detach()
-        x_adv = x.clone().detach()
-        x_adv = x_adv + torch.empty_like(x_adv).uniform_(-epsilon, epsilon)
+        alpha = self.epsilon_step  # step size
+        T = self.num_steps
+
+        x = images.clone().detach().to(self.device)
+        label = labels.clone().detach().to(self.device)
+        x_adv = x + torch.empty_like(x).uniform_(-epsilon, epsilon)
         x_adv = x_adv.clamp(0, 1)
+
         x_min = x - epsilon
         x_max = x + epsilon
 
-        for i in range(self.num_steps):
-            x_adv.requires_grad_(True)
+        for i in range(T):
+            x_adv.requires_grad_()
+            x_adv.grad = None  # <== nên có
             outputs = self.model(x_adv)
-            loss = nn.CrossEntropyLoss()(outputs, labels)
+            loss = nn.CrossEntropyLoss()(outputs, label)
             self.model.zero_grad()
             loss.backward()
             grad = x_adv.grad.sign()
+
             if untargeted:
-                x_adv = x_adv + self.epsilon_step * grad
+                x_adv = x_adv + alpha * grad
             else:
-                x_adv = x_adv - self.epsilon_step * grad
+                x_adv = x_adv - alpha * grad
+
             x_adv = torch.max(torch.min(x_adv, x_max), x_min)
             x_adv = x_adv.clamp(0, 1).detach()
-        return x_adv    
+
+        return x_adv
 
     
-    def generate_PGD_imp_adversarial_images(self, images, 
-                                    labels, 
-                                    untargeted):
+    def generate_PGD_imp_adversarial_images(self, images, labels, untargeted):
+            self.model.eval()
+            x_orig = images.clone().detach().to(self.device)
+            label = labels.clone().detach().to(self.device)
+            x_now = x_orig.clone()
+            T = self.num_steps
+
+            eta = torch.linspace(1 / T, 1, T, device=self.device)
+            beta = self.epsilon / eta.sum()
+            
+            x_min = x_orig - self.epsilon
+            x_max = x_orig + self.epsilon
+
+            def step_dir(grad):
+                return grad.sign() if untargeted else -grad.sign()
+
+            for t in range(T):
+                x_now.requires_grad_()
+                logits = self.model(x_now)
+                loss = nn.CrossEntropyLoss()(logits, label)
+                grad = torch.autograd.grad(loss, x_now)[0]
+
+                x_next = x_now + eta[t] * beta * step_dir(grad)
+                x_next = torch.max(torch.min(x_next, x_max), x_min)
+                x_next = x_next.clamp(0, 1)
+                x_now = x_next.detach()
+
+            return x_now
+
+
+    def generate_NES_PGD_Imp_adversarial_images(self, images, labels, untargeted=True):
+        """
+        PGD Improved với gia tốc Nesterov
+        images: tensor ảnh đầu vào (normalized [0, 1])
+        labels: ground-truth labels
+        untargeted: True nếu tấn công không mục tiêu
+        """
         self.model.eval()
-        x_now = images.clone().detach().to(self.device)
-        label = labels.clone().detach().to(self.device)
-        T = self.num_steps
-        
-        eta = torch.linspace(1/T, 1, T, device=self.device)
-        beta = self.epsilon / eta.sum()
-        
-        def step_dir(grad):
-            return grad.sign() if untargeted else -grad.sign()
-        
-        for t in range(T):
-            x_now.requires_grad_()
-            logits = self.model(x_now)
-            loss = nn.CrossEntropyLoss()(logits, label)
-            grad = torch.autograd.grad(loss, x_now)[0]
-            
-            
-            x_next = x_now + eta[t] * beta * step_dir(grad)
-            x_next.clamp_(0, 1)
-            
-            # x_round = torch.round(x_next*255) / 255
-            x_now = x_next.detach()
-        
-        x_adv = x_now
-        return x_adv
+        x_orig = images.clone().detach().to(self.device)
+        labels = labels.clone().detach().to(self.device)
 
-    def generate_NES_PGD_Imp_adversarial_images(self, image, label, untargeted, alpha=0.03, 
-                                            mu1=0.9, mu2=0.999, sigma=1e-8):
-        x_now = image.clone().detach().to(self.device)
-        m = torch.zeros_like(x_now)
+        T = self.num_steps                # Số bước lặp
+        epsilon = self.epsilon            # Tổng giới hạn perturbation
+        mu = 0.9                          # Momentum hệ số Nesterov
+        eta = torch.linspace(1/T, 1, T, device=self.device)  # Bước động
+        beta = epsilon / eta.sum()       # Tổng bước không vượt quá epsilon
+
+        x_now = x_orig.clone().detach()
         v = torch.zeros_like(x_now)
-        T = self.num_steps
-        eta = torch.linspace(1/T, 1, T, device=self.device)
-        beta = self.epsilon / eta.sum()
-        
+
+        x_min = x_orig - epsilon
+        x_max = x_orig + epsilon
+
         for t in range(T):
-            x_now.requires_grad_()
-            logits = self.model(x_now)
-        
-            loss = F.cross_entropy(logits, label)
-            grad = torch.autograd.grad(loss, x_now)[0]
-            
-            m = mu1 * m + (1 - mu1) * grad
-            v = mu2 * v + (1 - mu2) * grad.pow(2)
-            
-            
-            m_hat = m / (1 - mu1 ** (t + 1))
-            v_hat = v / (1 - mu2 ** (t + 1))
-            
-            delta = alpha * torch.tanh(m_hat / (v_hat.sqrt() + sigma))
-            x_next = x_now + delta if untargeted else x_now - delta
-            x_next.clamp_(0, 1)
+            # Tính điểm nhìn trước (Nesterov lookahead)
+            x_lookahead = (x_now + mu * v).detach().clone()
+            x_lookahead.requires_grad_()
 
+            outputs = self.model(x_lookahead)
+            loss = F.cross_entropy(outputs, labels)
+            grad = torch.autograd.grad(loss, x_lookahead)[0]
 
-            # x_round = torch.round(x_next * 255) / 255
-            x_now = x_next.detach()
-        x_adv = x_now
-        return x_adv
+            # Xác định hướng đi
+            step_dir = grad.sign() if untargeted else -grad.sign()
+
+            # Cập nhật momentum và vị trí
+            v = mu * v + eta[t] * beta * step_dir
+            x_next = x_now + v
+
+            # Giới hạn trong epsilon-ball và giá trị ảnh
+            x_next = torch.max(torch.min(x_next, x_max), x_min)
+            x_next = x_next.clamp(0, 1).detach()
+
+            x_now = x_next
+
+        return x_now
 
 def inject_images_into_dataloader(clean_dataloader, new_images, new_labels, batch_size=64, device='cpu'):
     clean_images = []
@@ -264,8 +285,8 @@ def predict_on_adversarial_testset(model, testloader, current_round,
     pil_image.save(os.path.join(output_dir, f"adversarial_1_to_{target}.jpg"))
 
     # print(f"Predictions on adversarial test set: {predictions[:10]}")
-    # print("Labels:", labels[:10])
-    # print("Preds:", preds[:10])
+    print("Labels:", labels[:10])
+    print("Preds:", preds[:10])
     print(f"ASR (Attack Success Rate): {correct_predictions / total_predictions if total_predictions > 0 else 0}")
 
     return correct_predictions / total_predictions if total_predictions > 0 else 0
