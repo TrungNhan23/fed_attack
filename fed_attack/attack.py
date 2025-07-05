@@ -8,7 +8,7 @@ from torchvision import transforms
 
 ATTACK_MODE = 'nes-pgd-imp'
 EPSILON = 8/255
-NUM_STEPS = 40
+NUM_STEPS = 50
 Clean = True
 DATA_MODE = 'iid'
 #if test in clean label attack, set the untargeted to True
@@ -20,7 +20,7 @@ else:
     TARGETED_LABEL = 3
     
 EPSILON_STEP = EPSILON / NUM_STEPS
-NUM_SAMPLES = 50
+NUM_SAMPLES = 100
 ROUND_TO_ATTACK = 10
 
 class PoisonedMNISTDataset(Dataset):
@@ -92,8 +92,8 @@ class Attacker():
             x_next = x_now + eta[t] * beta * step_dir(grad)
             x_next.clamp_(0, 1)
             
-            x_round = torch.round(x_next*255) / 255
-            x_now = x_round.detach()
+            # x_round = torch.round(x_next*255) / 255
+            x_now = x_next.detach()
         
         x_adv = x_now
         return x_adv
@@ -104,7 +104,6 @@ class Attacker():
         m = torch.zeros_like(x_now)
         v = torch.zeros_like(x_now)
         T = self.num_steps
-        
         eta = torch.linspace(1/T, 1, T, device=self.device)
         beta = self.epsilon / eta.sum()
         
@@ -126,8 +125,9 @@ class Attacker():
             x_next = x_now + delta if untargeted else x_now - delta
             x_next.clamp_(0, 1)
 
-            x_round = torch.round(x_next * 255) / 255
-            x_now = x_round.detach()
+
+            # x_round = torch.round(x_next * 255) / 255
+            x_now = x_next.detach()
         x_adv = x_now
         return x_adv
 
@@ -210,10 +210,10 @@ def predict_on_adversarial_testset(model, testloader, current_round,
         images, labels = images.to(device), labels.to(device)
 
         
-        # if isClean is not True: 
-        #     mask = (labels == 1)
-        #     images = images[mask]
-        #     labels = labels[mask]
+        if isClean is not True: 
+            mask = (labels == 1)
+            images = images[mask]
+            labels = labels[mask]
             
         if len(images) == 0:
             continue

@@ -139,7 +139,7 @@ def get_evaluate_fn(model):
     full_dataset = datasets.CIFAR10(root="../data", download=True, transform=transform, train=False)
     
     
-    eval_dataset = Subset(full_dataset, range(len(full_dataset),
+    eval_dataset = Subset(full_dataset, range(len(full_dataset) - 2000,
                                               len(full_dataset)))
     eval_loader = DataLoader(eval_dataset, batch_size=32, shuffle=True)
 
