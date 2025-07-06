@@ -17,7 +17,7 @@ if Clean:
     TARGETED_LABEL = 1
 else: 
     UNTARGETED = False
-    TARGETED_LABEL = 0
+    TARGETED_LABEL = 8
     
 EPSILON_STEP = EPSILON / NUM_STEPS
 NUM_SAMPLES = 100
@@ -32,7 +32,7 @@ class PoisonedMNISTDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, idx):
-        return {"image": self.images[idx], "label": self.labels[idx]}
+        return {"img": self.images[idx], "label": self.labels[idx]}
 
 class Attacker(): 
     def __init__(self, model, device):

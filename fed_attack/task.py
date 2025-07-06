@@ -52,23 +52,25 @@ def train(net, trainloader, epochs, device, lr=0.0005):
     
     net.to(device)  # move model to GPU if available
     criterion = torch.nn.CrossEntropyLoss().to(device)
-    # optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
     optimizer = torch.optim.AdamW(net.parameters(), lr=lr, weight_decay=1e-4)
     net.train()
     running_loss = 0.0
     for _ in range(epochs):
         for batch in trainloader:
-            images = batch["img"]
-            labels = batch["label"]
+            if isinstance(batch, dict) and "img" in batch:
+                images = batch["img"]
+                labels = batch["label"]
+                images, labels = images.to(device), labels.to(device)
+            else:
+                images, labels = batch
             optimizer.zero_grad()
-            loss = criterion(net(images.to(device)), labels.to(device))
+            loss = criterion(net(images), labels)
             loss.backward(retain_graph=True)
             optimizer.step()
             running_loss += loss.item()
 
     avg_trainloss = running_loss / len(trainloader)
     return avg_trainloss
-
 
 def test(net, testloader, device):
     """Validate the model on the test set."""

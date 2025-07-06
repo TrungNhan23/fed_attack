@@ -143,6 +143,11 @@ def get_evaluate_fn(model):
                                               len(full_dataset)))
     eval_loader = DataLoader(eval_dataset, batch_size=32, shuffle=True)
 
+    def save_model(model): 
+        return torch.save(model.state_dict(), "./net_model.pt")
+    
+    save_model(model)
+    
     # Define the evaluation function
     def evaluate(
         server_round: int, parameters: List[np.ndarray], config: Dict[str, float]

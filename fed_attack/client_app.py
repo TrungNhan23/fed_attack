@@ -105,7 +105,7 @@ class AttackerClient(NumPyClient):
             dataloader = self.trainloader   
         train_loss = train(
             self.net,
-            self.trainloader,
+            dataloader,
             self.local_epochs,
             self.device,
         )
