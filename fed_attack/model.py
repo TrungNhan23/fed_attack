@@ -66,7 +66,7 @@ class CNN(nn.Module):
 class Resnet18(nn.Module):
     def __init__(self):
         super().__init__()
-        self.model = resnet18(pretrain=False)
+        self.model = resnet18()
         self.model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.model.maxpool = nn.Identity()
         self.model.fc = nn.Linear(self.model.fc.in_features, 10)
@@ -139,9 +139,9 @@ def weights_init_normal(m):
         
 def get_model(config):
     if config == "cnn": 
-        return CNN()
+        return CNN
     elif config == "resnet18": 
-        return Resnet18()
+        return Resnet18
     else: 
         raise ValueError(f"Unknown model name: {config}")
 

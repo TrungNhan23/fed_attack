@@ -44,11 +44,11 @@ def load_data(partition_id: int, num_partitions: int, mode_data='iid'):
         return batch
 
     partition_train_test = partition_train_test.with_transform(apply_transforms)
-    trainloader = DataLoader(partition_train_test["train"], batch_size=64, shuffle=True)
+    trainloader = DataLoader(partition_train_test["train"], batch_size=32, shuffle=True)
     testloader = DataLoader(partition_train_test["test"], batch_size=64)
     return trainloader, testloader
 
-def train(net, trainloader, epochs, device, lr=0.0005):
+def train(net, trainloader, epochs, device, lr=0.001):
     
     net.to(device)  # move model to GPU if available
     criterion = torch.nn.CrossEntropyLoss().to(device)
