@@ -2,9 +2,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-
-class Net(nn.Module):
+from fed_attack.attack import MODEL
+from torchvision.models import resnet18
+class CNN(nn.Module):
     def __init__(self):
         super().__init__()
 
@@ -63,7 +63,16 @@ class Net(nn.Module):
         x = self.classifier(x)
         return x
 
+class Resnet18(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model = resnet18(pretrain=False)
+        self.model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.model.maxpool = nn.Identity()
+        self.model.fc = nn.Linear(self.model.fc.in_features, 10)
 
+    def forward(self, x):
+        return self.model(x)
 
 class Generator(nn.Module):
     def __init__(self):
@@ -126,3 +135,14 @@ def weights_init_normal(m):
     elif classname.find('BatchNorm') != -1:
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
+        
+        
+def get_model(config):
+    if config == "cnn": 
+        return CNN()
+    elif config == "resnet18": 
+        return Resnet18()
+    else: 
+        raise ValueError(f"Unknown model name: {config}")
+
+Net = get_model(MODEL)

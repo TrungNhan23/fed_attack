@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 import os
 from torchvision import transforms
 
-
+MODEL = "cnn" 
 ATTACK_MODE = 'pgd'
 EPSILON = 8/255
 NUM_STEPS = 50
